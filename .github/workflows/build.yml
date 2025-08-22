@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller --onefile pixel_art.py
+
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pixel_art-executable
+        path: dist/pixel_art.exe
+        retention-days: 30
+
+    - name: Generate release tag
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      id: tag
+      run: |
+        $date = Get-Date -Format "yyyy.MM.dd.HHmm"
+        $tag = "v$date"
+        echo "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+        echo "release_tag=$tag" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        name: "Basler Camera Profiler ${{ steps.tag.outputs.release_tag }}"
+        body: |
+          ## Basler Beam Profiler Release
+
+          **Built on:** ${{ steps.tag.outputs.release_tag }}
+          **Commit:** ${{ github.sha }}
+
+          ### What's New
+          - Latest build of Basler Beam Profiler
+          - Windows executable ready to use
+
+          ### Download
+          Download the `pixel_art.exe` file below and run it directly on Windows.
+        files: dist/pixel_art.exe
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: true
